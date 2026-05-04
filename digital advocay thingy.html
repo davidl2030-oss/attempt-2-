@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Advocacy Wall</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f4f4f4;color:#222}
+header{background:#0b6b70;color:#fff;padding:20px;text-align:center}
+.wrap{max-width:1100px;margin:auto;padding:20px}
+.card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+textarea,input{width:100%;padding:10px;margin-top:10px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+button{margin-top:10px;margin-right:6px;padding:10px 14px;border:none;border-radius:8px;background:#0b6b70;color:#fff;cursor:pointer}
+button:hover{background:#09565a}
+.bubble{display:inline-block;background:#dff3f4;padding:6px 10px;border-radius:999px;margin:4px;font-size:13px}
+.feed-item{background:#eef6f6;padding:10px;border-radius:8px;margin-top:8px}
+.small{font-size:12px;color:#666}
+</style>
+</head>
+<body>
+<header>
+  <h1>Digital Advocacy Wall</h1>
+  <p>Type or speak ideas for one of the five positions</p>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <label>Your name or team:</label>
+    <input id="name" placeholder="Optional">
+  </div>
+
+  <div class="grid" id="stations"></div>
+
+  <div class="card">
+    <h2>Live Wall</h2>
+    <div class="wall" id="wall"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent Ideas</h2>
+    <div id="feed"></div>
+  </div>
+</div>
+
+<template id="stationTemplate">
+  <div class="card">
+    <h3></h3>
+    <p class="desc"></p>
+    <textarea maxlength="180" placeholder="Type your argument..."></textarea>
+    <button class="speak">Speak</button>
+    <button class="sample">Sample</button>
+    <button class="send">Send</button>
+    <div class="small status"></div>
+  </div>
+</template>
+
+<script>
+const positions = [
+  {id:1,title:'1) Invest everything in ELTs',desc:'Prioritise engineered living tissues.'},
+  {id:2,title:'2) Invest everything in 3D Organs',desc:'Focus on bioprinted organs.'},
+  {id:3,title:'3) Invest in both equally',desc:'Split funding between both options.'},
+  {id:4,title:'4) Invest in existing technologies',desc:'Back current proven methods.'},
+  {id:5,title:'5) Invest in something else',desc:'Choose another idea entirely.'}
+];
+
+const samples = {
+  1:'ELTs may be faster to test and use.',
+  2:'3D organs could solve donor shortages long-term.',
+  3:'Both deserve support because the science is still developing.',
+  4:'Existing methods help patients right now.',
+  5:'Prevention and ethics may deserve more funding.'
+};
+
+const entries = [];
+const stations = document.getElementById('stations');
+const wall = document.getElementById('wall');
+const feed = document.getElementById('feed');
+
+positions.forEach(p => {
+  const t = document.getElementById('stationTemplate').content.cloneNode(true);
+  t.querySelector('h3').textContent = p.title;
+  t.querySelector('.desc').textContent = p.desc;
+  const ta = t.querySelector('textarea');
+  const status = t.querySelector('.status');
+
+  t.querySelector('.sample').onclick = () => {
+    ta.value = samples[p.id];
+    status.textContent = 'Sample added.';
+  };
+
+  t.querySelector('.send').onclick = () => sendIdea(p, ta, status);
+  t.querySelector('.speak').onclick = () => speak(ta, status);
+  stations.appendChild(t);
+});
+
+function sendIdea(position, ta, status) {
+  const text = ta.value.trim();
+  if (!text) {
+    status.textContent = 'Write something first.';
+    return;
+  }
+
+  entries.unshift({
+    position: position.title,
+    text: text,
+    speaker: document.getElementById('name').value || 'Anonymous',
+    time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+  });
+
+  ta.value = '';
+  status.textContent = 'Sent!';
+  render();
+}
+
+function render() {
+  wall.innerHTML = '';
+  feed.innerHTML = '';
+
+  positions.forEach(p => {
+    const box = document.createElement('div');
+    box.className = 'card';
+    const list = entries.filter(e => e.position === p.title);
+    box.innerHTML = '<h3>' + p.title + '</h3>';
+
+    if (list.length === 0) {
+      box.innerHTML += '<div class="bubble">No ideas yet</div>';
+    }
+
+    list.slice(0,8).forEach(e => {
+      box.innerHTML += '<div class="bubble">' + escapeHtml(e.text.split(' ').slice(0,6).join(' ')) + '</div>';
+    });
+
+    wall.appendChild(box);
+  });
+
+  if (entries.length === 0) {
+    feed.innerHTML = '<p>No ideas yet.</p>';
+    return;
+  }
+
+  entries.slice(0,10).forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    div.innerHTML = '<div class="small">' + escapeHtml(e.position) + ' • ' + escapeHtml(e.speaker) + ' • ' + e.time + '</div><div>' + escapeHtml(e.text) + '</div>';
+    feed.appendChild(div);
+  });
+}
+
+function speak(ta, status) {
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!R) {
+    status.textContent = 'Speech input not supported here.';
+    return;
+  }
+
+  const r = new R();
+  r.lang = 'en-US';
+  r.interimResults = true;
+  let final = '';
+  status.textContent = 'Listening...';
+
+  r.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const text = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += text + ' ';
+      else interim += text;
+    }
+    ta.value = (final + interim).trim();
+  };
+
+  r.onerror = () => status.textContent = 'Could not hear properly.';
+  r.onend = () => status.textContent = 'Speech captured.';
+  r.start();
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+render();
+</script>
+</body>
+</html>
